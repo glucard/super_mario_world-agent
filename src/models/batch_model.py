@@ -88,10 +88,8 @@ class DQN(nn.Module):
         #x = F.relu(self.fc1(x))
         x, (hn, cn) = self.lstm(x, (hn, cn))
         
-        print(x.shape)
         x = x[:,-1,:]
-        print(x.shape)
-        
+
         a = self.a(x)
         v = self.v(x)
         q = v + a - a.mean()
@@ -141,25 +139,25 @@ class DQN(nn.Module):
         states = torch.stack(states)
         actions = torch.cat(actions)
         rewards = torch.cat(rewards)
-        
         # next_states = torch.stack(next_states)
+
         non_final_states_mask = torch.tensor(tuple(map(lambda s: s is not None, next_states)), device=device)
-        #non_final_next_states = next_states[non_final_states_mask]
+        # non_final_next_states = next_states[non_final_states_mask]
         non_final_next_states = torch.stack([s for s in next_states if s is not None])
 
 
-        batch_size = 1
+        # batch_size = 1
         hn = torch.zeros(lstm_layers, batch_size, lstm_n, dtype=torch.float32, device=device) #requires gRAR?A?FAS?FAS?DSA
         cn = torch.zeros(lstm_layers, batch_size, lstm_n, dtype=torch.float32, device=device)
         max_action_qvalues = torch.zeros(batch_size, device=device)
         with torch.no_grad():
-            non_final_next_states = non_final_next_states
-            output = target_net(non_final_next_states, hn[:,non_final_states_mask], cn[:,non_final_states_mask])
+            target_net_states = torch.cat((states[non_final_states_mask], non_final_next_states.unsqueeze(1)), dim=1)
+            target_net_states = target_net_states[:,1:]
+            # non_final_next_states = non_final_next_states
+            output = target_net(target_net_states, hn[:,non_final_states_mask], cn[:,non_final_states_mask])
             y, hn, cn = output
             y_max = y.max(1)[0]
             max_action_qvalues[non_final_states_mask] = y_max
-        
-        input()
             
         # Set yj for terminal and non-terminal phij+1
         y = rewards + gamma * max_action_qvalues
