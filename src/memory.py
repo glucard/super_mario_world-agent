@@ -29,6 +29,9 @@ class Memory:
             return False, None
         x = torch.stack(tuple(self.memory))
         return True, x
+    def render_simple(self):
+        x = torch.stack(tuple(self.memory))
+        return x
     
     def clear(self):
         self.memory.clear()

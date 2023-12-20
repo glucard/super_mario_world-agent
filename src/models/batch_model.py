@@ -74,26 +74,27 @@ class DQN(nn.Module):
         self.v = nn.Linear(lstm_n, 1)
         self.a = nn.Linear(lstm_n, action_space)
         
-    def forward(self, x, hn, cn):
+    def forward(self, x, hn_cn):
+        (hn, cn) = hn_cn
         batch_size = x.shape[0]
-        x = x.reshape((-1, x.shape[-3], x.shape[-2], x.shape[-1]))
+        # x = x.reshape((-1, x.shape[-3], x.shape[-2], x.shape[-1]))
         x = F.relu(self.conv_0(x))
         x = self.maxpool_0(x)
         x = F.relu(self.conv_1(x))
         x = self.maxpool_1(x)
         x = F.relu(self.conv_2(x))
         x = self.maxpool_2(x)
-        x = x.reshape((batch_size, -1, x.shape[-3], x.shape[-2], x.shape[-1]))
-        x = torch.flatten(x, 2)
+        # x = x.reshape((batch_size, -1, x.shape[-3], x.shape[-2], x.shape[-1]))
+        x = torch.flatten(x, 1)
         #x = F.relu(self.fc1(x))
         x, (hn, cn) = self.lstm(x, (hn, cn))
         
-        x = x[:,-1,:]
+        # x = x[:,-1,:]
 
         a = self.a(x)
         v = self.v(x)
         q = v + a - a.mean()
-        return q, hn, cn
+        return q, (hn, cn)
     
     def forward_prompt(self, x, hn, cn):
         batch_size = x.shape[0]
@@ -128,7 +129,7 @@ class DQN(nn.Module):
     
     def q_train(self, target_net, optimizer, loss_fn, sequence, gamma, lstm_n, lstm_layers, device):
         states, actions, rewards, next_states = *zip(*sequence), # let the ',' to not give syntax error
-        batch_size = len(states) # - 1
+        sequence_length = len(states) # - 1
 
         # because of input and action delay, current state get the next reward.
         #states = states[:-1]
@@ -147,28 +148,27 @@ class DQN(nn.Module):
 
 
         # batch_size = 1
-        hn = torch.zeros(lstm_layers, batch_size, lstm_n, dtype=torch.float32, device=device) #requires gRAR?A?FAS?FAS?DSA
-        cn = torch.zeros(lstm_layers, batch_size, lstm_n, dtype=torch.float32, device=device)
-        max_action_qvalues = torch.zeros(batch_size, device=device)
+        hn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device) #requires gRAR?A?FAS?FAS?DSA
+        cn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device)
+        max_action_qvalues = torch.zeros(sequence_length, device=device)
         with torch.no_grad():
-            target_net_states = torch.cat((states[non_final_states_mask], non_final_next_states.unsqueeze(1)), dim=1)
-            target_net_states = target_net_states[:,1:]
+            #target_net_states = torch.cat((states[non_final_states_mask], non_final_next_states.unsqueeze(1)), dim=1)
+            #target_net_states = target_net_states[:,1:]
             # non_final_next_states = non_final_next_states
-            output = target_net(target_net_states, hn[:,non_final_states_mask], cn[:,non_final_states_mask])
-            y, hn, cn = output
+            y, (hn, cn) = target_net(non_final_next_states, (hn, cn))
             y_max = y.max(1)[0]
             max_action_qvalues[non_final_states_mask] = y_max
             
         # Set yj for terminal and non-terminal phij+1
         y = rewards + gamma * max_action_qvalues
         
-        hn = torch.zeros(lstm_layers, batch_size, lstm_n, dtype=torch.float32, device=device, requires_grad=True)
-        cn = torch.zeros(lstm_layers, batch_size, lstm_n, dtype=torch.float32, device=device, requires_grad=True)
-        qvalues, hn, cn = self(states, hn, cn)
+        optimizer.zero_grad()
+        hn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device, requires_grad=True)
+        cn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device, requires_grad=True)
+        qvalues, (hn, cn) = self(states, (hn, cn))
 
         qvalues = qvalues.gather(1, actions)
         loss = loss_fn(qvalues, y.unsqueeze(1))
-        optimizer.zero_grad()
         
         loss.backward()
         
