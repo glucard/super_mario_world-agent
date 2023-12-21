@@ -63,7 +63,7 @@ class GameEnv:
         if GetForegroundWindow() != self.camera.window_handle:
             raise Exception(f"{GetWindowText(self.camera.window_handle)} cannot be minimized.") 
 
-        self.toggle_pause()
+        #self.toggle_pause()
         #print("unpaused")
 
         if action == 0:
@@ -87,8 +87,8 @@ class GameEnv:
             time.sleep(0.01)
             self.press_key('x')
 
-        time.sleep(0.2) # wait
-        self.toggle_pause()
+        time.sleep(0.12) # wait
+        #self.toggle_pause()
         #print("paused")
 
         current_camera_pos = self.game_memory_reader.get_value('camera_pos')
@@ -97,6 +97,10 @@ class GameEnv:
         self.last_camera_pos = current_camera_pos
 
         if self.mario_current_life_state != self.game_memory_reader.get_value('life_state') or current_camera_pos == 0:
+            self.release_key('left_arrow')
+            self.release_key('right_arrow')
+            self.release_key('c')
+            self.release_key('x')
             reward = -50
             game_over = True
         # time.sleep(0.1)
@@ -117,3 +121,4 @@ class GameEnv:
         self.press_key('PAUSE')
         time.sleep(0.01)
         self.release_key('PAUSE')
+        time.sleep(0.01)
