@@ -28,7 +28,8 @@ class GameEnv:
         'SPACE':0x20,
         'PAUSE':0x13
     }
-    save_states = ['F1', 'F2'] # , 'F3', 'F4']
+    save_states = ['F1'] #, 'F2', 'F3', 'F4']
+    checkpoint_distance = 1_000_000
     
     def __init__(self, executable_name, game_window_name, window_offset=(0,0,0,0)):
 
@@ -38,8 +39,10 @@ class GameEnv:
         # setting memory reader
         self.game_memory_reader = GameMemoryReader(executable_name)
         self.game_memory_reader.add_memory_pointer('life', 0x0090F520, [0x90])
-        self.game_memory_reader.add_memory_pointer('life_state', 0x0090F520, [0xB4])
+        self.game_memory_reader.add_memory_pointer('life_state', 0x0090F520, [0xB4]) # its not life_state, change when player lost control of character
         self.game_memory_reader.add_memory_pointer('camera_pos', 0x00012698, [0x18])
+        self.game_memory_reader.add_memory_pointer('change_on_level_end', 0x008EDE1C, [0x24])
+        self.game_memory_reader.add_memory_pointer('change_on_going_back_to_map', 0x0002C9A0, [0x88]) # check death
 
         # reset current state
         self.reset()
@@ -48,11 +51,16 @@ class GameEnv:
 
         save_state = random.choice(GameEnv.save_states)
         self.press_key(save_state)
-        time.sleep(0.25)
+        time.sleep(0.5)
         self.release_key(save_state)
 
-        self.mario_current_life_state = self.game_memory_reader.get_value('life_state')
+        self.last_reached_checkpoint = self.get_curr_checkpoint()
+        self.frames_on_checkpoint_count = 0
+
+        self.mario_current_life_state = self.game_memory_reader.get_value('change_on_going_back_to_map')
+        #print(self.mario_current_life_state)
         self.last_camera_pos = self.game_memory_reader.get_value('camera_pos')
+        self.current_end_state = self.game_memory_reader.get_value('change_on_level_end')
 
         return self.camera.get_frame() # obs
 
@@ -91,19 +99,36 @@ class GameEnv:
         #self.toggle_pause()
         #print("paused")
 
-        current_camera_pos = self.game_memory_reader.get_value('camera_pos')
-        reward += 1 if current_camera_pos > self.last_camera_pos else -1
-        # reward += -1 if current_camera_pos < self.last_camera_pos else 0
-        self.last_camera_pos = current_camera_pos
+        curr_checkpoint = self.get_curr_checkpoint()
+        if curr_checkpoint > self.last_reached_checkpoint:
+            self.last_reached_checkpoint = curr_checkpoint
+            reward = 10
+            self.frames_on_checkpoint_count = 0
+        self.frames_on_checkpoint_count += 1
 
-        if self.mario_current_life_state != self.game_memory_reader.get_value('life_state') or current_camera_pos == 0:
+        if self.frames_on_checkpoint_count > 40:
+            reward = -20
+            game_over = True
+        # reward += 1 if current_camera_pos > self.last_camera_pos else -1
+        # reward += -1 if current_camera_pos < self.last_camera_pos else 0
+        #self.last_camera_pos = current_camera_pos
+
+        if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
+            reward = -5
+            game_over = True
+        # time.sleep(0.1)
+            
+        if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
+            reward = 200
+            game_over = True
+            print(reward)
+
+        
+        if game_over:
             self.release_key('left_arrow')
             self.release_key('right_arrow')
             self.release_key('c')
             self.release_key('x')
-            reward = -50
-            game_over = True
-        # time.sleep(0.1)
 
         return [
             self.camera.get_frame(), # obs
@@ -111,6 +136,10 @@ class GameEnv:
             game_over, # game_over
         ]
     
+    def get_curr_checkpoint(self):
+        current_camera_pos = self.game_memory_reader.get_value('camera_pos')
+        return current_camera_pos // GameEnv.checkpoint_distance
+
     def press_key(self, key):
         win32api.keybd_event(GameEnv.VK_CODE[key], win32api.MapVirtualKey(GameEnv.VK_CODE[key], 0), 0, 0)
 
