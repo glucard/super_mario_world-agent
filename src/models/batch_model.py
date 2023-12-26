@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 CROP_DIMS = 60, 40, 95, 95
-RESIZE = 150, 150
+RESIZE = 50, 50
 
 def phi(observation, device):
     x = observation.transpose([2, 0, 1])
@@ -13,7 +13,7 @@ def phi(observation, device):
     # x = torchvision.transforms.functional.crop(x, *CROP_DIMS)
     # x = torchvision.transforms.Grayscale()(x)
     x = torchvision.transforms.Resize(RESIZE, antialias=True)(x)
-    # x = torchvision.transforms.Normalize(mean=x.mean(), std=x.std())(x)
+    x = torchvision.transforms.Normalize(mean=x.mean(), std=x.std())(x)
     return x
 
 def prompt_conv(x):
@@ -69,7 +69,7 @@ class DQN(nn.Module):
         self.maxpool_2 = nn.MaxPool2d(2, stride=2)
         self.flatten = nn.Flatten() # 4x6x6
         
-        self.lstm = nn.LSTM(36992, lstm_n, lstm_layers, batch_first=True)
+        self.lstm = nn.LSTM(2048, lstm_n, lstm_layers, batch_first=True, dropout=0.3)
         
         self.v = nn.Linear(lstm_n, 1)
         self.a = nn.Linear(lstm_n, action_space)
@@ -131,30 +131,17 @@ class DQN(nn.Module):
         states, actions, rewards, next_states = *zip(*sequence), # let the ',' to not give syntax error
         sequence_length = len(states) # - 1
 
-        # because of input and action delay, current state get the next reward.
-        #states = states[:-1]
-        #actions = actions[:-1]
-        #rewards = rewards[1:]
-        #next_states = next_states[:-1]
-
         states = torch.stack(states)
         actions = torch.cat(actions)
         rewards = torch.cat(rewards)
-        # next_states = torch.stack(next_states)
 
         non_final_states_mask = torch.tensor(tuple(map(lambda s: s is not None, next_states)), device=device)
-        # non_final_next_states = next_states[non_final_states_mask]
         non_final_next_states = torch.stack([s for s in next_states if s is not None])
-
-
-        # batch_size = 1
-        hn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device) #requires gRAR?A?FAS?FAS?DSA
+        
+        hn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device)
         cn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device)
         max_action_qvalues = torch.zeros(sequence_length, device=device)
         with torch.no_grad():
-            #target_net_states = torch.cat((states[non_final_states_mask], non_final_next_states.unsqueeze(1)), dim=1)
-            #target_net_states = target_net_states[:,1:]
-            # non_final_next_states = non_final_next_states
             y, (hn, cn) = target_net(non_final_next_states, (hn, cn))
             y_max = y.max(1)[0]
             max_action_qvalues[non_final_states_mask] = y_max
@@ -162,9 +149,10 @@ class DQN(nn.Module):
         # Set yj for terminal and non-terminal phij+1
         y = rewards + gamma * max_action_qvalues
         
-        optimizer.zero_grad()
         hn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device, requires_grad=True)
         cn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device, requires_grad=True)
+
+        optimizer.zero_grad()
         qvalues, (hn, cn) = self(states, (hn, cn))
 
         qvalues = qvalues.gather(1, actions)
