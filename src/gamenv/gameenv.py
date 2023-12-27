@@ -26,10 +26,11 @@ class GameEnv:
         'F10':0x79,
         ']':0xDD,
         'SPACE':0x20,
-        'PAUSE':0x13
+        'PAUSE':0x13,
+        'p': 0x50,
     }
     save_states = ['F1'] #, 'F2', 'F3', 'F4']
-    checkpoint_distance = 1_000_000
+    checkpoint_distance = 1_000
     
     def __init__(self, executable_name, game_window_name, window_offset=(0,0,0,0)):
 
@@ -79,6 +80,7 @@ class GameEnv:
             self.press_key('right_arrow')
             self.release_key('x') # maybe action to unhold
             self.release_key('c')
+
         if action == 1:
             self.release_key('right_arrow')
             self.press_key('left_arrow')
@@ -94,32 +96,47 @@ class GameEnv:
             self.release_key('x')
             time.sleep(0.01)
             self.press_key('x')
+            
+        # self.skip_frame(10)
 
-        time.sleep(0.12) # wait
+        #time.sleep(0.12) # wait
         #self.toggle_pause()
         #print("paused")
+        
+        
+        current_camera_pos = self.game_memory_reader.get_value('camera_pos')
 
         curr_checkpoint = self.get_curr_checkpoint()
         if curr_checkpoint > self.last_reached_checkpoint:
             self.last_reached_checkpoint = curr_checkpoint
-            reward = 10
+            reward = 0.1
             self.frames_on_checkpoint_count = 0
+        elif curr_checkpoint < self.last_reached_checkpoint:
+            self.last_reached_checkpoint = curr_checkpoint
+            reward = -0.5
+            self.frames_on_checkpoint_count = 0
+        else:
+            reward = -0.1
+
         self.frames_on_checkpoint_count += 1
 
-        if self.frames_on_checkpoint_count > 40:
-            reward = -20
-            game_over = True
+        """ if self.frames_on_checkpoint_count > 40:
+            reward = -1
+            game_over = True """
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
         #self.last_camera_pos = current_camera_pos
+        
+        if current_camera_pos == 0:
+            reward = -1
+            game_over = True
 
         if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
-            reward = -5
+            reward = -1
             game_over = True
-        # time.sleep(0.1)
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
-            reward = 200
+            reward = 2
             game_over = True
             print(reward)
 
@@ -148,6 +165,12 @@ class GameEnv:
 
     def toggle_pause(self):
         self.press_key('PAUSE')
-        time.sleep(0.01)
+        time.sleep(0.2)
         self.release_key('PAUSE')
-        time.sleep(0.01)
+        time.sleep(0.2)
+    
+    def skip_frame(self, n_frames):
+        for _ in range(n_frames):
+            self.press_key('p')
+            #self.release_key('p')
+            #time.sleep(0.1)

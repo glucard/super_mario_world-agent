@@ -5,15 +5,17 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 CROP_DIMS = 60, 40, 95, 95
-RESIZE = 50, 50
+RESIZE = 80, 80
 
 def phi(observation, device):
     x = observation.transpose([2, 0, 1])
-    x = torch.tensor(x, dtype=torch.float32, device=device)/255
+    x = torch.tensor(x, dtype=torch.float32, device=device)
+    
     # x = torchvision.transforms.functional.crop(x, *CROP_DIMS)
     # x = torchvision.transforms.Grayscale()(x)
     x = torchvision.transforms.Resize(RESIZE, antialias=True)(x)
-    x = torchvision.transforms.Normalize(mean=x.mean(), std=x.std())(x)
+    mean, std = x.mean([1,2]), x.std([1,2])
+    x = torchvision.transforms.Normalize(mean=mean, std=std)(x)
     return x
 
 def prompt_conv(x):
@@ -69,21 +71,21 @@ class DQN(nn.Module):
         self.maxpool_2 = nn.MaxPool2d(2, stride=2)
         self.flatten = nn.Flatten() # 4x6x6
         
-        self.lstm = nn.LSTM(2048, lstm_n, lstm_layers, batch_first=True, dropout=0.3)
+        self.lstm = nn.LSTM(20736, lstm_n, lstm_layers, batch_first=True, dropout=0.1)
         
         self.v = nn.Linear(lstm_n, 1)
         self.a = nn.Linear(lstm_n, action_space)
         
     def forward(self, x, hn_cn):
         (hn, cn) = hn_cn
-        batch_size = x.shape[0]
+        #batch_size = x.shape[0]
         # x = x.reshape((-1, x.shape[-3], x.shape[-2], x.shape[-1]))
         x = F.relu(self.conv_0(x))
         x = self.maxpool_0(x)
         x = F.relu(self.conv_1(x))
         x = self.maxpool_1(x)
-        x = F.relu(self.conv_2(x))
-        x = self.maxpool_2(x)
+        #x = F.relu(self.conv_2(x))
+        #x = self.maxpool_2(x)
         # x = x.reshape((batch_size, -1, x.shape[-3], x.shape[-2], x.shape[-1]))
         x = torch.flatten(x, 1)
         #x = F.relu(self.fc1(x))
