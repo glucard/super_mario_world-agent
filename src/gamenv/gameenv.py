@@ -75,68 +75,82 @@ class GameEnv:
         #self.toggle_pause()
         #print("unpaused")
 
-        if action == 0:
-            self.release_key('left_arrow')
-            self.press_key('right_arrow')
-            self.release_key('x') # maybe action to unhold
-            self.release_key('c')
+        self.release_key('left_arrow')
+        self.release_key('right_arrow')
+        # self.release_key('c')
+        self.release_key('x')
 
-        if action == 1:
-            self.release_key('right_arrow')
-            self.press_key('left_arrow')
-            self.release_key('x')
-            self.release_key('c')
-        
-        if action == 2:
+        if action == 0:
+            # self.release_key('left_arrow')
+            self.press_key('right_arrow')
+            # self.release_key('x') # maybe action to unhold
+            # self.release_key('c')
+
+        elif action == 1:
+            reward += -0.05
             self.release_key('c')
             time.sleep(0.01)
             self.press_key('c')
+
+        elif action == 2:
+            # self.release_key('right_arrow')
+            self.press_key('left_arrow')
+            # self.release_key('x')
+            # self.release_key('c')
         
-        if action == 3:
+        
+        elif action == 3:
             self.release_key('x')
             time.sleep(0.01)
             self.press_key('x')
             
         # self.skip_frame(10)
 
-        #time.sleep(0.12) # wait
+        time.sleep(0.04) # wait
         #self.toggle_pause()
         #print("paused")
+        #self.release_key('c')
         
         
         current_camera_pos = self.game_memory_reader.get_value('camera_pos')
 
         curr_checkpoint = self.get_curr_checkpoint()
         if curr_checkpoint > self.last_reached_checkpoint:
+            # if moving right
             self.last_reached_checkpoint = curr_checkpoint
-            reward = 0.1
+            reward += 0.5
             self.frames_on_checkpoint_count = 0
         elif curr_checkpoint < self.last_reached_checkpoint:
+            # if moving left 
             self.last_reached_checkpoint = curr_checkpoint
-            reward = -0.5
+            reward += -0.1
             self.frames_on_checkpoint_count = 0
         else:
-            reward = -0.1
+            # if not moving
+            reward += 0
 
         self.frames_on_checkpoint_count += 1
 
-        """ if self.frames_on_checkpoint_count > 40:
-            reward = -1
-            game_over = True """
+        if self.frames_on_checkpoint_count > 100:
+            reward += -1
+            game_over = True
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
         #self.last_camera_pos = current_camera_pos
         
         if current_camera_pos == 0:
-            reward = -1
+            # if back to map start
+            reward += -1
             game_over = True
 
         if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
-            reward = -1
+            # if died
+            reward += -1
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
-            reward = 2
+            # if win
+            reward += 100
             game_over = True
             print(reward)
 
