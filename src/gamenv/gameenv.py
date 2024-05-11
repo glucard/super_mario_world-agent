@@ -87,7 +87,7 @@ class GameEnv:
             # self.release_key('c')
 
         elif action == 1:
-            reward += -0.05
+            reward += -0.1
             self.release_key('c')
             time.sleep(0.01)
             self.press_key('c')
@@ -132,7 +132,7 @@ class GameEnv:
         self.frames_on_checkpoint_count += 1
 
         if self.frames_on_checkpoint_count > 100:
-            reward += -1
+            reward += -5
             game_over = True
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
@@ -145,7 +145,7 @@ class GameEnv:
 
         if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
             # if died
-            reward += -1
+            reward += -10
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):

@@ -171,20 +171,22 @@ class DQN(nn.Module):
         return q, hn, cn
     
     
-    def q_train(self, target_net, optimizer, loss_fn, sequence, gamma, lstm_n, lstm_layers, device):
-        states, actions, rewards, next_states = *zip(*sequence), # let the ',' to not give syntax error
-        sequence_length = len(states) # - 1
+    def q_train(self, target_net, optimizer, loss_fn, sample, gamma, lstm_n, lstm_layers, replay_memory, device):
+        # states, actions, rewards, next_states, priorities, indices, weights = *zip(*sample), # let the ',' to not give syntax error
+        states, actions, rewards, next_states, priorities, indices, weights = sample # let the ',' to not give syntax error
+        sample_length = len(states) # - 1
 
         states = torch.stack(states)
         actions = torch.cat(actions)
         rewards = torch.cat(rewards)
+        # weights = torch.stack(rewards)
 
         non_final_states_mask = torch.tensor(tuple(map(lambda s: s is not None, next_states)), device=device)
         non_final_next_states = torch.stack([s for s in next_states if s is not None])
         
         hn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device)
         cn = torch.zeros(lstm_layers, lstm_n, dtype=torch.float32, device=device)
-        max_action_qvalues = torch.zeros(sequence_length, device=device)
+        max_action_qvalues = torch.zeros(sample_length, device=device)
         with torch.no_grad():
             y, (hn, cn) = target_net(non_final_next_states, (hn, cn))
             y_max = y.max(1)[0]
@@ -200,11 +202,14 @@ class DQN(nn.Module):
         qvalues, (hn, cn) = self(states, (hn, cn))
 
         qvalues = qvalues.gather(1, actions)
-        loss = loss_fn(qvalues, y.unsqueeze(1))
-        
+        # loss = loss_fn(qvalues, y.unsqueeze(1))
+        td_errors = torch.abs(qvalues - y.unsqueeze(1))
+        loss = torch.square(td_errors) * weights.unsqueeze(1)
+        loss = loss.mean()
         loss.backward()
         
-        torch.nn.utils.clip_grad_value_(self.parameters(), 100)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 0.001)
         optimizer.step()
         
+        replay_memory.update_priorities(indices, td_errors + 1e-5)
         return loss
