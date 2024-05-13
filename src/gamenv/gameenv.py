@@ -5,6 +5,8 @@ import random, time
 from .gamecamera import GameCamera
 from .gamememoryreader import GameMemoryReader
 
+import multiprocessing
+
 class GameEnv:
 
     VK_CODE = {
@@ -29,7 +31,7 @@ class GameEnv:
         'PAUSE':0x13,
         'p': 0x50,
     }
-    save_states = ['F1'] #, 'F2', 'F3', 'F4']
+    save_states = ['F2'] #, 'F2'] # , 'F3', 'F4']
     checkpoint_distance = 1_000
     
     def __init__(self, executable_name, game_window_name, window_offset=(0,0,0,0)):
@@ -39,11 +41,13 @@ class GameEnv:
 
         # setting memory reader
         self.game_memory_reader = GameMemoryReader(executable_name)
+        self.game_memory_reader.add_memory_pointer('score', 0x0090193C, [0xC8])
         self.game_memory_reader.add_memory_pointer('life', 0x0090F520, [0x90])
         self.game_memory_reader.add_memory_pointer('life_state', 0x0090F520, [0xB4]) # its not life_state, change when player lost control of character
         self.game_memory_reader.add_memory_pointer('camera_pos', 0x00012698, [0x18])
         self.game_memory_reader.add_memory_pointer('change_on_level_end', 0x008EDE1C, [0x24])
         self.game_memory_reader.add_memory_pointer('change_on_going_back_to_map', 0x0002C9A0, [0x88]) # check death
+        self.frame_buffer = []
 
         # reset current state
         self.reset()
@@ -62,8 +66,13 @@ class GameEnv:
         #print(self.mario_current_life_state)
         self.last_camera_pos = self.game_memory_reader.get_value('camera_pos')
         self.current_end_state = self.game_memory_reader.get_value('change_on_level_end')
+        self.score = self.game_memory_reader.get_value('score')
 
         return self.camera.get_frame() # obs
+    
+    def start_buffer():
+        num_processes = multiprocessing.cpu_count()
+        pool = multiprocessing.Pool(processes=num_processes)
 
     def step(self, action):
         reward = 0
@@ -75,25 +84,27 @@ class GameEnv:
         #self.toggle_pause()
         #print("unpaused")
 
-        self.release_key('left_arrow')
-        self.release_key('right_arrow')
+        #self.press_key('right_arrow')
+        
+        #self.release_key('left_arrow')
+        # self.release_key('right_arrow')
         # self.release_key('c')
         self.release_key('x')
 
         if action == 0:
-            # self.release_key('left_arrow')
+            self.release_key('left_arrow')
             self.press_key('right_arrow')
             # self.release_key('x') # maybe action to unhold
             # self.release_key('c')
 
         elif action == 1:
-            reward += -0.1
+            reward += -0.5
             self.release_key('c')
             time.sleep(0.01)
             self.press_key('c')
 
         elif action == 2:
-            # self.release_key('right_arrow')
+            self.release_key('right_arrow')
             self.press_key('left_arrow')
             # self.release_key('x')
             # self.release_key('c')
@@ -101,59 +112,69 @@ class GameEnv:
         
         elif action == 3:
             self.release_key('x')
-            time.sleep(0.01)
+            time.sleep(0.05)
             self.press_key('x')
             
         # self.skip_frame(10)
 
-        time.sleep(0.04) # wait
+        time.sleep(0.1) # wait
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
-        
-        
+        """
+        curr_score = self.game_memory_reader.get_value('score')
+        if self.score < curr_score:
+            print("mario scored")
+            self.score = curr_score
+            reward += 5
+        """
         current_camera_pos = self.game_memory_reader.get_value('camera_pos')
 
         curr_checkpoint = self.get_curr_checkpoint()
         if curr_checkpoint > self.last_reached_checkpoint:
+            #print("mario advanced")
             # if moving right
             self.last_reached_checkpoint = curr_checkpoint
-            reward += 0.5
+            # reward += 0.5
             self.frames_on_checkpoint_count = 0
         elif curr_checkpoint < self.last_reached_checkpoint:
+            #print("mario backed")
             # if moving left 
             self.last_reached_checkpoint = curr_checkpoint
             reward += -0.1
             self.frames_on_checkpoint_count = 0
         else:
+            #print("mario standing")
             # if not moving
             reward += 0
-
         self.frames_on_checkpoint_count += 1
 
-        if self.frames_on_checkpoint_count > 100:
+        if self.frames_on_checkpoint_count > 50:
+            #print("mario is stuck")
             reward += -5
             game_over = True
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
-        #self.last_camera_pos = current_camera_pos
-        
+        self.last_camera_pos = current_camera_pos
+        """
         if current_camera_pos == 0:
             # if back to map start
             reward += -1
             game_over = True
+        """
 
         if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
             # if died
-            reward += -10
+            #print("mario died")
+            reward += -1
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
             # if win
+            #print("mario win")
             reward += 100
             game_over = True
-            print(reward)
-
+            #print(reward)
         
         if game_over:
             self.release_key('left_arrow')
@@ -168,6 +189,7 @@ class GameEnv:
         ]
     
     def get_curr_checkpoint(self):
+
         current_camera_pos = self.game_memory_reader.get_value('camera_pos')
         return current_camera_pos // GameEnv.checkpoint_distance
 
