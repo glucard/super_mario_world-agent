@@ -197,7 +197,7 @@ class DQN(nn.Module):
         states = torch.stack(states)
         actions = torch.cat(actions)
         rewards = torch.cat(rewards)
-        # weights = torch.stack(rewards)
+        weights = torch.stack(weights)
 
         non_final_states_mask = torch.tensor(tuple(map(lambda s: s is not None, next_states)), device=device)
         non_final_next_states = torch.stack([s for s in next_states if s is not None])
@@ -223,7 +223,7 @@ class DQN(nn.Module):
         # loss = loss_fn(qvalues, y.unsqueeze(1))
         td_errors = torch.abs(qvalues - y.unsqueeze(1))
         td_errors = torch.clamp(td_errors, min=-1, max=1)
-        loss = torch.square(td_errors) # * weights.unsqueeze(1)
+        loss = torch.square(td_errors) * weights.unsqueeze(1)
 
         # loss = loss.mean()
         # loss.backward()
