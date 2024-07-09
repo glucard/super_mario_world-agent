@@ -1,3 +1,4 @@
 .env
 runs/
 saved_models/
+__pycache__
