@@ -4,7 +4,7 @@ import win32com.client
 import numpy as np
 
 class GameCamera:
-    def __init__(self, window_name, window_offset=(0,0,0,0) ):
+    def __init__(self, window_name, window_offset=(0,0,0,0)):
         self.window_offset = window_offset
         self.shell = win32com.client.Dispatch("WScript.Shell")
         self.window_handle = FindWindow(None, window_name)
@@ -18,4 +18,4 @@ class GameCamera:
     def get_frame(self):
         with mss.mss() as sct:
             img = sct.grab(self.window_rect)
-        return np.array(img)[:, :, :3]
+        return np.array(img)[..., [2, 1, 0]]
