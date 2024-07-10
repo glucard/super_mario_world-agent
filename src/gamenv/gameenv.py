@@ -7,8 +7,13 @@ from .gamememoryreader import GameMemoryReader
 
 import multiprocessing
 
-class GameEnv:
+import gym
+from gym import spaces
 
+import numpy as np
+
+class GameEnv(gym.Env):
+    metadata = {'render.modes': ['human']}
     VK_CODE = {
         'c': 0x43,
         'left_arrow':0x25,
@@ -31,10 +36,17 @@ class GameEnv:
         'PAUSE':0x13,
         'p': 0x50,
     }
-    save_states = ['F2'] #, 'F2'] # , 'F3', 'F4']
+    save_states = ['F1'] #, 'F2'] # , 'F3', 'F4']
     checkpoint_distance = 1_000
     
-    def __init__(self, executable_name, game_window_name, window_offset=(0,0,0,0)):
+    def __init__(self, executable_name="snes9x.exe", game_window_name="mario - Snes9x 1.62.3", window_offset=(20, 120, -10, -50)):
+        super(GameEnv, self).__init__()
+
+        # setting gym
+        self.action_space = spaces.Discrete(4)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(80, 80, 3), dtype=np.uint8)
+        self._max_episode_steps = 200  # Set your maximum episode steps
+        self._elapsed_steps = 0
 
         # setting camera
         self.camera = GameCamera(game_window_name, window_offset)
@@ -53,6 +65,7 @@ class GameEnv:
         self.reset()
     
     def reset(self):
+        self.camera.set_foreground_game()
 
         save_state = random.choice(GameEnv.save_states)
         self.press_key(save_state)
@@ -68,7 +81,7 @@ class GameEnv:
         self.current_end_state = self.game_memory_reader.get_value('change_on_level_end')
         self.score = self.game_memory_reader.get_value('score')
 
-        return self.camera.get_frame() # obs
+        return self.camera.get_frame(), {} # obs
     
     def start_buffer():
         num_processes = multiprocessing.cpu_count()
@@ -182,12 +195,16 @@ class GameEnv:
             self.release_key('c')
             self.release_key('x')
 
-        return [
-            self.camera.get_frame(), # obs
-            reward, # reward
-            game_over, # game_over
-        ]
+        done = game_over
+        truncated = self._elapsed_steps >= self._max_episode_steps
+        info = {}
+        return self.camera.get_frame(), reward, done, truncated, info
     
+    def render(self, mode='human'):
+        pass
+    def close(self):
+        # Clean up resources (optional)
+        pass
     def get_curr_checkpoint(self):
 
         current_camera_pos = self.game_memory_reader.get_value('camera_pos')
@@ -210,3 +227,4 @@ class GameEnv:
             self.press_key('p')
             #self.release_key('p')
             #time.sleep(0.1)
+
