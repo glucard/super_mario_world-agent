@@ -7,12 +7,12 @@ from .gamememoryreader import GameMemoryReader
 
 import multiprocessing
 
-import gym
-from gym import spaces
+import gymnasium
+from gymnasium import spaces
 
 import numpy as np
 
-class GameEnv(gym.Env):
+class GameEnv(gymnasium.Env):
     metadata = {'render.modes': ['human']}
     VK_CODE = {
         'c': 0x43,
@@ -43,10 +43,12 @@ class GameEnv(gym.Env):
         super(GameEnv, self).__init__()
 
         # setting gym
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.MultiDiscrete([3, 3])
         self.observation_space = spaces.Box(low=0, high=255, shape=(80, 80, 3), dtype=np.uint8)
+        self.metadata = {'render.modes': ['human']}
         self._max_episode_steps = 200  # Set your maximum episode steps
         self._elapsed_steps = 0
+        self.num_envs = 1
 
         # setting camera
         self.camera = GameCamera(game_window_name, window_offset)
@@ -64,7 +66,7 @@ class GameEnv(gym.Env):
         # reset current state
         self.reset()
     
-    def reset(self):
+    def reset(self, seed=None, options=None):
         self.camera.set_foreground_game()
 
         save_state = random.choice(GameEnv.save_states)
@@ -80,8 +82,11 @@ class GameEnv(gym.Env):
         self.last_camera_pos = self.game_memory_reader.get_value('camera_pos')
         self.current_end_state = self.game_memory_reader.get_value('change_on_level_end')
         self.score = self.game_memory_reader.get_value('score')
+        self._elapsed_steps = 0
 
-        return self.camera.get_frame(), {} # obs
+        obs = self.camera.get_frame()
+        info = {}
+        return obs, info
     
     def start_buffer():
         num_processes = multiprocessing.cpu_count()
@@ -103,34 +108,42 @@ class GameEnv(gym.Env):
         # self.release_key('right_arrow')
         # self.release_key('c')
         self.release_key('x')
+        
+        action1, action2 = action
 
-        if action == 0:
+        if action1 == 0:
             self.release_key('left_arrow')
             self.press_key('right_arrow')
             # self.release_key('x') # maybe action to unhold
             # self.release_key('c')
-
-        elif action == 1:
-            reward += -0.5
-            self.release_key('c')
-            time.sleep(0.01)
-            self.press_key('c')
-
-        elif action == 2:
+            
+        elif action1 == 2:
+            self.release_key('right_arrow')
+            self.release_key('left_arrow')
+            # self.release_key('x')
+            # self.release_key('c')
+            
+        elif action1 == 1:
             self.release_key('right_arrow')
             self.press_key('left_arrow')
             # self.release_key('x')
             # self.release_key('c')
+
+        if action2 == 0:
+            # reward += -0.5
+            self.press_key('c')
         
-        
-        elif action == 3:
+        elif action2 == 1:
             self.release_key('x')
-            time.sleep(0.05)
+            self.release_key('c')
+
+        elif action2 == 2:
+            self.release_key('x')
             self.press_key('x')
             
         # self.skip_frame(10)
 
-        time.sleep(0.1) # wait
+        time.sleep(0.01) # wait
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
@@ -148,13 +161,13 @@ class GameEnv(gym.Env):
             #print("mario advanced")
             # if moving right
             self.last_reached_checkpoint = curr_checkpoint
-            # reward += 0.5
+            reward += 0.5
             self.frames_on_checkpoint_count = 0
         elif curr_checkpoint < self.last_reached_checkpoint:
             #print("mario backed")
             # if moving left 
             self.last_reached_checkpoint = curr_checkpoint
-            reward += -0.1
+            reward += -0.5
             self.frames_on_checkpoint_count = 0
         else:
             #print("mario standing")
@@ -164,22 +177,21 @@ class GameEnv(gym.Env):
 
         if self.frames_on_checkpoint_count > 50:
             #print("mario is stuck")
-            reward += -5
+            reward += -1
             game_over = True
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
         self.last_camera_pos = current_camera_pos
-        """
+
         if current_camera_pos == 0:
             # if back to map start
             reward += -1
             game_over = True
-        """
 
         if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
             # if died
             #print("mario died")
-            reward += -1
+            reward += -2
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
@@ -194,14 +206,17 @@ class GameEnv(gym.Env):
             self.release_key('right_arrow')
             self.release_key('c')
             self.release_key('x')
-
+            
+        self._elapsed_steps += 1
         done = game_over
         truncated = self._elapsed_steps >= self._max_episode_steps
         info = {}
         return self.camera.get_frame(), reward, done, truncated, info
     
     def render(self, mode='human'):
-        pass
+        if mode == 'human':
+            pass
+
     def close(self):
         # Clean up resources (optional)
         pass

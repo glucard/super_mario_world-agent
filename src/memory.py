@@ -45,7 +45,7 @@ class Memory:
 
 class PrioritizedReplayMemory:
     
-    def __init__(self, capacity, torch_device, prob_alpha=0.6, queue_push_thread = False):
+    def __init__(self, capacity, prob_alpha=0.6, queue_push_thread = False):
 
         def que_push_thread_func(self):
             while True:
@@ -61,7 +61,6 @@ class PrioritizedReplayMemory:
         self.memory = deque([], maxlen=capacity)
         self.priorities = np.zeros((capacity,), dtype=np.float32)
         self.prob_alpha = prob_alpha
-        self.torch_device = torch_device
         self.memory_lock = threading.Lock()
         self.push_memory_lock = threading.Lock()
         self.push_queue_memory = []
@@ -117,7 +116,7 @@ class PrioritizedReplayMemory:
         
         weights = (m * probs[indices] ** (-beta))
         weights /= weights.max()
-        weights = torch.tensor(weights, dtype=torch.float32).to(self.torch_device)
+        weights = torch.tensor(weights, dtype=torch.float32)
 
         states, actions, rewards, next_states, priorities = *zip(*samples),
         return states, actions, rewards, next_states, priorities, indices, weights
