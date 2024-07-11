@@ -108,7 +108,7 @@ class GameEnv(gymnasium.Env):
         # self.release_key('right_arrow')
         # self.release_key('c')
         self.release_key('x')
-        
+
         action1, action2 = action
 
         if action1 == 0:
@@ -161,13 +161,13 @@ class GameEnv(gymnasium.Env):
             #print("mario advanced")
             # if moving right
             self.last_reached_checkpoint = curr_checkpoint
-            reward += 0.5
+            reward += 0.1
             self.frames_on_checkpoint_count = 0
         elif curr_checkpoint < self.last_reached_checkpoint:
             #print("mario backed")
             # if moving left 
             self.last_reached_checkpoint = curr_checkpoint
-            reward += -0.5
+            reward += -0.2
             self.frames_on_checkpoint_count = 0
         else:
             #print("mario standing")
@@ -175,9 +175,9 @@ class GameEnv(gymnasium.Env):
             reward += 0
         self.frames_on_checkpoint_count += 1
 
-        if self.frames_on_checkpoint_count > 50:
+        if self.frames_on_checkpoint_count > 150:
             #print("mario is stuck")
-            reward += -1
+            reward += -5
             game_over = True
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
@@ -191,7 +191,7 @@ class GameEnv(gymnasium.Env):
         if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
             # if died
             #print("mario died")
-            reward += -2
+            reward += -5
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
@@ -207,9 +207,10 @@ class GameEnv(gymnasium.Env):
             self.release_key('c')
             self.release_key('x')
             
-        self._elapsed_steps += 1
+        self._elapsed_steps += 0 # 1
         done = game_over
         truncated = self._elapsed_steps >= self._max_episode_steps
+
         info = {}
         return self.camera.get_frame(), reward, done, truncated, info
     
@@ -233,9 +234,9 @@ class GameEnv(gymnasium.Env):
 
     def toggle_pause(self):
         self.press_key('PAUSE')
-        time.sleep(0.2)
+        time.sleep(0.1)
         self.release_key('PAUSE')
-        time.sleep(0.2)
+        time.sleep(0.1)
     
     def skip_frame(self, n_frames):
         for _ in range(n_frames):
