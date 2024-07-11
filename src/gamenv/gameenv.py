@@ -61,6 +61,9 @@ class GameEnv(gymnasium.Env):
         self.game_memory_reader.add_memory_pointer('camera_pos', 0x00012698, [0x18])
         self.game_memory_reader.add_memory_pointer('change_on_level_end', 0x008EDE1C, [0x24])
         self.game_memory_reader.add_memory_pointer('change_on_going_back_to_map', 0x0002C9A0, [0x88]) # check death
+        self.game_memory_reader.add_memory_pointer('detect_defeat?', 0x00772020, [0x50]) # if equal to 13568
+
+        
         self.frame_buffer = []
 
         # reset current state
@@ -143,7 +146,7 @@ class GameEnv(gymnasium.Env):
             
         # self.skip_frame(10)
 
-        time.sleep(0.01) # wait
+        time.sleep(0.03) # wait
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
@@ -188,7 +191,8 @@ class GameEnv(gymnasium.Env):
             reward += -1
             game_over = True
 
-        if self.mario_current_life_state != self.game_memory_reader.get_value('change_on_going_back_to_map'): # or current_camera_pos == 0:
+        # print(self.game_memory_reader.get_value('detect_defeat?'))
+        if 13568 == self.game_memory_reader.get_value('detect_defeat?'): # or current_camera_pos == 0:
             # if died
             #print("mario died")
             reward += -5
@@ -234,9 +238,9 @@ class GameEnv(gymnasium.Env):
 
     def toggle_pause(self):
         self.press_key('PAUSE')
-        time.sleep(0.1)
+        time.sleep(0.2)
         self.release_key('PAUSE')
-        time.sleep(0.1)
+        time.sleep(0.2)
     
     def skip_frame(self, n_frames):
         for _ in range(n_frames):
