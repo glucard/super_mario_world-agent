@@ -39,12 +39,12 @@ class GameEnv(gymnasium.Env):
     save_states = ['F1'] #, 'F2'] # , 'F3', 'F4']
     checkpoint_distance = 1_000
     
-    def __init__(self, executable_name="snes9x.exe", game_window_name="mario - Snes9x 1.62.3", window_offset=(20, 120, -10, -50)):
+    def __init__(self, executable_name="snes9x.exe", game_window_name="mario - Snes9x 1.62.3", window_offset=(10, 150, 550, 500)):
         super(GameEnv, self).__init__()
 
         # setting gym
         self.action_space = spaces.MultiDiscrete([3, 3])
-        self.observation_space = spaces.Box(low=0, high=255, shape=(80, 80, 3), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(180, 180, 3), dtype=np.uint8)
         self.metadata = {'render.modes': ['human']}
         self._max_episode_steps = 200  # Set your maximum episode steps
         self._elapsed_steps = 0
@@ -133,7 +133,7 @@ class GameEnv(gymnasium.Env):
             # self.release_key('c')
 
         if action2 == 0:
-            # reward += -0.5
+            reward += -0.005
             self.press_key('c')
         
         elif action2 == 1:
@@ -146,7 +146,7 @@ class GameEnv(gymnasium.Env):
             
         # self.skip_frame(10)
 
-        time.sleep(0.03) # wait
+        time.sleep(0.05) # wait
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
@@ -164,38 +164,38 @@ class GameEnv(gymnasium.Env):
             #print("mario advanced")
             # if moving right
             self.last_reached_checkpoint = curr_checkpoint
-            reward += 0.1
+            reward += 0.01
             self.frames_on_checkpoint_count = 0
         elif curr_checkpoint < self.last_reached_checkpoint:
             #print("mario backed")
             # if moving left 
             self.last_reached_checkpoint = curr_checkpoint
-            reward += -0.2
+            reward += -0.05
             self.frames_on_checkpoint_count = 0
         else:
             #print("mario standing")
             # if not moving
-            reward += 0
+            reward += -0.005
         self.frames_on_checkpoint_count += 1
 
-        if self.frames_on_checkpoint_count > 150:
+        if self.frames_on_checkpoint_count > 50:
             #print("mario is stuck")
-            reward += -5
+            #reward += -5
             game_over = True
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
         self.last_camera_pos = current_camera_pos
 
-        if current_camera_pos == 0:
-            # if back to map start
-            reward += -1
-            game_over = True
+        # if current_camera_pos == 0:
+        #     # if back to map start
+        #     reward += -1
+        #     game_over = True
 
         # print(self.game_memory_reader.get_value('detect_defeat?'))
         if 13568 == self.game_memory_reader.get_value('detect_defeat?'): # or current_camera_pos == 0:
             # if died
             #print("mario died")
-            reward += -5
+            reward += -1
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):
@@ -235,7 +235,7 @@ class GameEnv(gymnasium.Env):
 
     def release_key(self, key):
         win32api.keybd_event(GameEnv.VK_CODE[key], win32api.MapVirtualKey(GameEnv.VK_CODE[key], 0), win32con.KEYEVENTF_KEYUP, 0)
-
+    
     def toggle_pause(self):
         self.press_key('PAUSE')
         time.sleep(0.2)
