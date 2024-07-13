@@ -52,9 +52,9 @@ class GameCamera:
         
         # resize img
         new_width, new_height = 180, 180 # Set your desired width and height
-        resized_img = img.crop(self.window_offset).resize((new_width, new_height), Image.ANTIALIAS)
+        resized_img = img.convert("L").crop(self.window_offset).resize((new_width, new_height), Image.ANTIALIAS)
 
         # Convert the Pillow image to a NumPy array
         img_np = np.array(resized_img)
 
-        return img_np
+        return img_np[:,:,None]

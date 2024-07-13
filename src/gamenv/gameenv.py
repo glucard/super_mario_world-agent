@@ -43,8 +43,9 @@ class GameEnv(gymnasium.Env):
         super(GameEnv, self).__init__()
 
         # setting gym
-        self.action_space = spaces.MultiDiscrete([3, 3])
-        self.observation_space = spaces.Box(low=0, high=255, shape=(180, 180, 3), dtype=np.uint8)
+        # self.action_space = spaces.MultiDiscrete([2, 2])
+        self.action_space = spaces.Discrete(2)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(180, 180, 1), dtype=np.uint8)
         self.metadata = {'render.modes': ['human']}
         self._max_episode_steps = 200  # Set your maximum episode steps
         self._elapsed_steps = 0
@@ -110,43 +111,35 @@ class GameEnv(gymnasium.Env):
         #self.release_key('left_arrow')
         # self.release_key('right_arrow')
         # self.release_key('c')
-        self.release_key('x')
 
-        action1, action2 = action
+        # action1, action2 = action
+        action2 = action
+        self.press_key('right_arrow')
 
-        if action1 == 0:
-            self.release_key('left_arrow')
-            self.press_key('right_arrow')
-            # self.release_key('x') # maybe action to unhold
-            # self.release_key('c')
+        # if action1 == 0:
+        #     self.release_key('left_arrow')
+        #     self.press_key('right_arrow')
+        #     # self.release_key('x') # maybe action to unhold
+        #     # self.release_key('c')
             
-        elif action1 == 2:
-            self.release_key('right_arrow')
-            self.release_key('left_arrow')
-            # self.release_key('x')
-            # self.release_key('c')
-            
-        elif action1 == 1:
-            self.release_key('right_arrow')
-            self.press_key('left_arrow')
-            # self.release_key('x')
-            # self.release_key('c')
+        # elif action1 == 1:
+        #     self.release_key('right_arrow')
+        #     self.press_key('left_arrow')
+        #     # self.release_key('x')
+        #     # self.release_key('c')
 
         if action2 == 0:
-            reward += -0.005
+            reward += -0.01
             self.press_key('c')
-        
-        elif action2 == 1:
             self.release_key('x')
-            self.release_key('c')
 
-        elif action2 == 2:
-            self.release_key('x')
+        elif action2 == 1:
             self.press_key('x')
+            self.release_key('c')
             
         # self.skip_frame(10)
 
-        time.sleep(0.05) # wait
+        time.sleep(0.01) # wait
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
@@ -164,7 +157,7 @@ class GameEnv(gymnasium.Env):
             #print("mario advanced")
             # if moving right
             self.last_reached_checkpoint = curr_checkpoint
-            reward += 0.01
+            reward += 0.05
             self.frames_on_checkpoint_count = 0
         elif curr_checkpoint < self.last_reached_checkpoint:
             #print("mario backed")
