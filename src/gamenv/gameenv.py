@@ -48,7 +48,7 @@ class GameEnv(gymnasium.Env):
         # self.action_space = spaces.MultiDiscrete([2, 2])
         self.last_frame_count = 0
         self.action_space = spaces.Discrete(2)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(seq_len_frames, 80, 80, 1), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(seq_len_frames, 1, 80, 80), dtype=np.uint8)
         self.metadata = {'render.modes': ['human']}
         self._max_episode_steps = 200  # Set your maximum episode steps
         self._elapsed_steps = 0
@@ -104,6 +104,10 @@ class GameEnv(gymnasium.Env):
         return obs, info
     
     def step(self, action):
+        # timming frames per second
+        interval = 1.0 / 20
+        start_time = time.time()
+        
         if not self.camera.is_running:
             self.camera.start_buffer()
         reward = 0
@@ -136,8 +140,9 @@ class GameEnv(gymnasium.Env):
         #     # self.release_key('x')
         #     # self.release_key('c')
 
+        # timming frames per second
         if action2 == 0:
-            reward += -0.01
+            reward += -0.1
             self.press_key('c')
             self.release_key('x')
 
@@ -146,8 +151,9 @@ class GameEnv(gymnasium.Env):
             self.release_key('c')
             
         # self.skip_frame(10)
-
-        time.sleep(0.01) # wait
+        elapsed_time = time.time() - start_time  # Calculate the time taken for the iteration
+        sleep_time = max(0, interval - elapsed_time)  # Calculate the remaining time to sleep
+        time.sleep(sleep_time)  # Sleep for the remaining time to maintain the desired frequency
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
@@ -186,7 +192,7 @@ class GameEnv(gymnasium.Env):
         if pos_difference != 0:
             self.frames_on_checkpoint_count = 0
 
-            reward += pos_difference / 100
+            reward += pos_difference / 30
         self.frames_on_checkpoint_count += 1
 
         if self.frames_on_checkpoint_count > 100:
@@ -207,7 +213,7 @@ class GameEnv(gymnasium.Env):
         if 13568 == self.game_memory_reader.get_value('detect_defeat?'): # or current_camera_pos == 0:
             # if died
             #print("mario died")
-            reward += -1
+            reward += -10
             game_over = True
             
         if self.current_end_state != self.game_memory_reader.get_value('change_on_level_end'):

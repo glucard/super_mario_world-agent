@@ -65,7 +65,7 @@ class GameCamera:
         # Convert the Pillow image to a NumPy array
         img_np = np.array(resized_img)
 
-        return img_np[:,:,None]
+        return img_np
     
     def old_get_frame(self):
         with mss.mss() as sct:
@@ -75,8 +75,8 @@ class GameCamera:
         resized_img = img.convert("L").crop(self.window_offset).resize((new_width, new_height), Image.ANTIALIAS)
 
         # Convert the Pillow image to a NumPy array
-        img_np = np.array(resized_img)
-        return img_np[:,:,None]
+        img_np = np.array(resized_img, dtype=np.uint8)
+        return img_np
 
     
 class CameraFrameBuffer(GameCamera):
@@ -110,7 +110,7 @@ class CameraFrameBuffer(GameCamera):
                 done = not self.is_running
                 self.frame_buffer[:max_capacity-1] = self.frame_buffer[1:]
                 try:
-                    self.frame_buffer[-1] = self.old_get_frame()
+                    self.frame_buffer[-1] = self.old_get_frame()[None]
                     self.frame_count+=1
                 except Exception as e:
                     print(e)
@@ -148,16 +148,15 @@ class CameraFrameBuffer(GameCamera):
         return buffer
 
     def reset_buffer(self) -> None:
-        frame = self.get_frame()
+        frame = self.get_frame()[None]
         shape = frame.shape
-        frame_buffer = np.zeros((self._max_capacity, *shape), dtype=np.float32)
+        frame_buffer = np.zeros((self._max_capacity, *shape), dtype=np.uint8)
 
         for i in range(self._max_capacity):
             frame_buffer[i] = frame
 
         with self.lock:
             self.frame_buffer = frame_buffer
-
 
 def debug():
     game_window_name="mario - Snes9x 1.62.3"
