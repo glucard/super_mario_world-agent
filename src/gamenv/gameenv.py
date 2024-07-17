@@ -1,8 +1,10 @@
-from win32gui import GetForegroundWindow, GetWindowText
+
 import win32api, win32con
 import random, time
 
-from .gamecamera import GameCamera
+import threading
+
+from .gamecamera import GameCamera, CameraFrameBuffer
 from .gamememoryreader import GameMemoryReader
 
 import multiprocessing
@@ -39,20 +41,21 @@ class GameEnv(gymnasium.Env):
     save_states = ['F1'] #, 'F2'] # , 'F3', 'F4']
     checkpoint_distance = 1_000
     
-    def __init__(self, executable_name="snes9x.exe", game_window_name="mario - Snes9x 1.62.3", window_offset=(10, 150, 550, 500)):
+    def __init__(self, seq_len_frames:int=4, executable_name="snes9x.exe", game_window_name="mario - Snes9x 1.62.3", window_offset=(10, 150, 550, 500)):
         super(GameEnv, self).__init__()
 
         # setting gym
         # self.action_space = spaces.MultiDiscrete([2, 2])
+        self.last_frame_count = 0
         self.action_space = spaces.Discrete(2)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(180, 180, 1), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(seq_len_frames, 80, 80, 1), dtype=np.float32)
         self.metadata = {'render.modes': ['human']}
         self._max_episode_steps = 200  # Set your maximum episode steps
         self._elapsed_steps = 0
         self.num_envs = 1
 
         # setting camera
-        self.camera = GameCamera(game_window_name, window_offset)
+        self.camera = CameraFrameBuffer(max_capacity=seq_len_frames, window_name=game_window_name, window_offset=window_offset)
 
         # setting memory reader
         self.game_memory_reader = GameMemoryReader(executable_name)
@@ -65,13 +68,18 @@ class GameEnv(gymnasium.Env):
         self.game_memory_reader.add_memory_pointer('detect_defeat?', 0x00772020, [0x50]) # if equal to 13568
 
         
-        self.frame_buffer = []
+        # frame_buffer thread
+        frame_buffer_lock = threading.Lock()
+
 
         # reset current state
         self.reset()
     
     def reset(self, seed=None, options=None):
         self.camera.set_foreground_game()
+        if not self.camera.is_running:
+            self.camera.start_buffer()
+        self.camera.reset_buffer()
 
         save_state = random.choice(GameEnv.save_states)
         self.press_key(save_state)
@@ -88,20 +96,20 @@ class GameEnv(gymnasium.Env):
         self.score = self.game_memory_reader.get_value('score')
         self._elapsed_steps = 0
 
-        obs = self.camera.get_frame()
+        # frame buffering
+        self.frame_buffer = []
+
+        obs = self.camera.get_frame_buffer()
         info = {}
         return obs, info
     
-    def start_buffer():
-        num_processes = multiprocessing.cpu_count()
-        pool = multiprocessing.Pool(processes=num_processes)
-
     def step(self, action):
+        if not self.camera.is_running:
+            self.camera.start_buffer()
         reward = 0
         game_over = False
 
-        if GetForegroundWindow() != self.camera.window_handle:
-            raise Exception(f"{GetWindowText(self.camera.window_handle)} cannot be minimized.") 
+        self.camera.check_window()
 
         #self.toggle_pause()
         #print("unpaused")
@@ -143,6 +151,9 @@ class GameEnv(gymnasium.Env):
         #self.toggle_pause()
         #print("paused")
         #self.release_key('c')
+        #while(self.camera.frame_count == self.last_frame_count):
+        #    time.sleep(0.05)
+        #self.last_frame_count = self.camera.frame_count
         """
         curr_score = self.game_memory_reader.get_value('score')
         if self.score < curr_score:
@@ -153,28 +164,36 @@ class GameEnv(gymnasium.Env):
         current_camera_pos = self.game_memory_reader.get_value('camera_pos')
 
         curr_checkpoint = self.get_curr_checkpoint()
-        if curr_checkpoint > self.last_reached_checkpoint:
-            #print("mario advanced")
-            # if moving right
-            self.last_reached_checkpoint = curr_checkpoint
-            reward += 0.05
+        
+        pos_difference = (current_camera_pos - self.last_camera_pos) / 65536
+        # if curr_checkpoint > self.last_reached_checkpoint:
+        #     #print("mario advanced")
+        #     # if moving right
+        #     self.last_reached_checkpoint = curr_checkpoint
+        #     reward += 0.05
+        #     self.frames_on_checkpoint_count = 0
+        # elif curr_checkpoint < self.last_reached_checkpoint:
+        #     #print("mario backed")
+        #     # if moving left 
+        #     self.last_reached_checkpoint = curr_checkpoint
+        #     reward += -0.05
+        #     self.frames_on_checkpoint_count = 0
+        # else:
+        #     #print("mario standing")
+        #     # if not moving
+        #     reward += -0.005
+
+        if pos_difference != 0:
             self.frames_on_checkpoint_count = 0
-        elif curr_checkpoint < self.last_reached_checkpoint:
-            #print("mario backed")
-            # if moving left 
-            self.last_reached_checkpoint = curr_checkpoint
-            reward += -0.05
-            self.frames_on_checkpoint_count = 0
-        else:
-            #print("mario standing")
-            # if not moving
-            reward += -0.005
+
+            reward += pos_difference / 100
         self.frames_on_checkpoint_count += 1
 
-        if self.frames_on_checkpoint_count > 50:
+        if self.frames_on_checkpoint_count > 100:
             #print("mario is stuck")
             #reward += -5
             game_over = True
+
         # reward += 1 if current_camera_pos > self.last_camera_pos else -1
         # reward += -1 if current_camera_pos < self.last_camera_pos else 0
         self.last_camera_pos = current_camera_pos
@@ -209,7 +228,7 @@ class GameEnv(gymnasium.Env):
         truncated = self._elapsed_steps >= self._max_episode_steps
 
         info = {}
-        return self.camera.get_frame(), reward, done, truncated, info
+        return self.camera.get_frame_buffer(), reward, done, truncated, info
     
     def render(self, mode='human'):
         if mode == 'human':
@@ -241,3 +260,9 @@ class GameEnv(gymnasium.Env):
             #self.release_key('p')
             #time.sleep(0.1)
 
+
+# class FrameBuffer:
+#     def __init__(self):
+#         self.frame_buffer = []
+
+#     def

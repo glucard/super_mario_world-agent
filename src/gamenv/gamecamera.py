@@ -5,6 +5,8 @@ import numpy as np
 from PIL import Image
 from ctypes import windll
 
+import mss.tools
+
 from collections import deque
 from threading import Thread, Lock
 import time
@@ -57,13 +59,25 @@ class GameCamera:
         win32gui.DeleteObject(dataBitMap.GetHandle())
         
         # resize img
-        new_width, new_height = 180, 180 # Set your desired width and height
+        new_width, new_height = 80, 80 # Set your desired width and height
         resized_img = img.convert("L").crop(self.window_offset).resize((new_width, new_height), Image.ANTIALIAS)
 
         # Convert the Pillow image to a NumPy array
         img_np = np.array(resized_img)
 
         return img_np[:,:,None]
+    
+    def old_get_frame(self):
+        with mss.mss() as sct:
+            img = sct.grab(self.window_rect)
+        img = Image.fromarray(np.array(img)[..., [2, 1, 0]])
+        new_width, new_height = 80, 80 # Set your desired width and height
+        resized_img = img.convert("L").crop(self.window_offset).resize((new_width, new_height), Image.ANTIALIAS)
+
+        # Convert the Pillow image to a NumPy array
+        img_np = np.array(resized_img)
+        return img_np[:,:,None]
+
     
 class CameraFrameBuffer(GameCamera):
     def __init__(self, max_capacity: int, **kwarg):
@@ -74,10 +88,11 @@ class CameraFrameBuffer(GameCamera):
         self.thread = None
         self.lock = Lock()
         self.reset_buffer()
+        self.frame_count = 0
 
     def worker_t(self) -> None:
-        n_times_per_second = 20  # The desired number of iterations per second
-        interval = 1.0 / n_times_per_second  # Time interval between iterations in seconds
+        n_times_per_second = self._max_capacity  # The desired number of iterations per second
+        interval = 1.0 / 60  # Time interval between iterations in seconds
         max_capacity = self._max_capacity
 
         done = False
@@ -94,7 +109,14 @@ class CameraFrameBuffer(GameCamera):
             with self.lock:
                 done = not self.is_running
                 self.frame_buffer[:max_capacity-1] = self.frame_buffer[1:]
-                self.frame_buffer[-1] = self.get_frame()
+                try:
+                    self.frame_buffer[-1] = self.old_get_frame()
+                    self.frame_count+=1
+                except Exception as e:
+                    print(e)
+                    self.is_running = False
+                    return
+            
                 
             elapsed_time = time.time() - start_time  # Calculate the time taken for the iteration
             sleep_time = max(0, interval - elapsed_time)  # Calculate the remaining time to sleep
@@ -109,6 +131,7 @@ class CameraFrameBuffer(GameCamera):
             self.is_running = True
             self.thread = Thread(target=self.worker_t, daemon=True)
             self.thread.start()
+        print("buffer_started")
 
     def stop_buffer(self) -> None:
         with self.lock:
@@ -121,7 +144,8 @@ class CameraFrameBuffer(GameCamera):
         with self.lock:
             if not self.is_running:
                 raise StopAsyncIteration("Frame buffer is not running")
-            return self.frame_buffer.copy()
+            buffer = self.frame_buffer.copy()
+        return buffer
 
     def reset_buffer(self) -> None:
         frame = self.get_frame()
@@ -142,9 +166,11 @@ def debug():
     camera.set_foreground_game()
     camera.start_buffer()
 
-    for i in range(10):
+    for i in range(100):
         print(camera.get_frame_buffer().shape)
-        time.sleep(0.1)
+    time.sleep(5)
+    print(camera.frame_count)
+
 
     camera.stop_buffer()
     print(camera.is_running)
